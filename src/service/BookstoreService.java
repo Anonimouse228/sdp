@@ -4,6 +4,14 @@ import database.DatabaseConnection;
 import model.Book;
 import model.Customer;
 import model.Order;
+import model.OrderImpl;
+import model.decorator.DiscountedOrder;
+import model.decorator.ExpeditedShippingOrder;
+import model.decorator.GiftWrappedOrder;
+import observer.Admin;
+import observer.InventoryManager;
+import observer.Observer;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,12 +20,52 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class BookstoreService {
+    private final InventoryManager inventoryManager;
     private Connection connection;
 
-    public BookstoreService() {
-        this.connection = DatabaseConnection.getInstance().getConnection();
+
+    public Order createOrderWithDecorators(List<Book> books, boolean applyDiscount, boolean giftWrap, boolean expediteShipping) {
+        Order order = new OrderImpl(books);
+
+        if (applyDiscount) {
+            order = new DiscountedOrder(order, 10); // 10% discount
+        }
+        if (giftWrap) {
+            order = new GiftWrappedOrder(order);
+        }
+        if (expediteShipping) {
+            order = new ExpeditedShippingOrder(order);
+        }
+
+        System.out.println(order.getDescription() + " | Total Price: $" + order.calculateTotalPrice());
+        return order;
     }
 
+    public BookstoreService() {
+        this.inventoryManager = new InventoryManager();
+
+
+        Admin admin1 = new Admin("Alice");
+        Customer customer1 = new Customer("Bob");
+
+        inventoryManager.addObserver(admin1);
+        inventoryManager.addObserver((Observer) customer1);
+    }
+
+
+    public void addBookToInventoryManager(Book book) {
+        inventoryManager.addBook(book);
+    }
+
+
+    public void updateBookStock(Book book, int newStock) {
+        inventoryManager.updateStock(book, newStock);
+    }
+    
+    public BookstoreService(InventoryManager inventoryManager) {
+        this.inventoryManager = inventoryManager;
+        this.connection = DatabaseConnection.getInstance().getConnection();
+    }
 
     public void addBook(Book book) throws SQLException {
         String query = "INSERT INTO Books (title, author, price, stock) VALUES (?, ?, ?, ?)";
@@ -30,7 +78,6 @@ public class BookstoreService {
             System.out.println("Book added: " + book.getTitle());
         }
     }
-
 
     public Book findBookById(int bookId) throws SQLException {
         String query = "SELECT * FROM Books WHERE book_id = ?";
@@ -51,7 +98,6 @@ public class BookstoreService {
         return null;
     }
 
-
     public void addCustomer(Customer customer) throws SQLException {
         String query = "INSERT INTO Customers (name, email, phone, address) VALUES (?, ?, ?, ?)";
         try (PreparedStatement statement = connection.prepareStatement(query)) {
@@ -63,7 +109,6 @@ public class BookstoreService {
             System.out.println("Customer added: " + customer.getName());
         }
     }
-
 
     public void placeOrder(int customerId, List<Book> books) throws SQLException {
         String orderQuery = "INSERT INTO Orders (customer_id) VALUES (?)";
@@ -97,7 +142,6 @@ public class BookstoreService {
             connection.setAutoCommit(true);
         }
     }
-
 
     public List<Book> getInventory() throws SQLException {
         List<Book> books = new ArrayList<>();
